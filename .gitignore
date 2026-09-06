@@ -1,0 +1,28 @@
+# Target / Maven Build Outputs
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Node / React Dependencies & Builds
+**/node_modules/
+**/dist/
+**/build/
+.npm
+*.log
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS / Temp files
+.DS_Store
+Thumbs.db
+tmp/
+scratch/
+*.tmp
