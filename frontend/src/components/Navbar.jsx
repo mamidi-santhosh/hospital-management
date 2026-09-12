@@ -37,29 +37,35 @@ export default function Navbar() {
             </Typography>
           </Box>
 
-          {isAuthenticated && (
+          {isAuthenticated && user && (
             <Box display="flex" alignItems="center" gap={1}>
-              <Button
-                color="inherit"
-                onClick={() => navigate('/patient')}
-                sx={{ borderRadius: 2, color: location.pathname === '/patient' ? '#38bdf8' : 'inherit' }}
-              >
-                Patient Portal
-              </Button>
-              <Button
-                color="inherit"
-                onClick={() => navigate('/doctor')}
-                sx={{ borderRadius: 2, color: location.pathname === '/doctor' ? '#38bdf8' : 'inherit' }}
-              >
-                Doctor Portal
-              </Button>
-              <Button
-                color="inherit"
-                onClick={() => navigate('/admin')}
-                sx={{ borderRadius: 2, color: location.pathname === '/admin' ? '#38bdf8' : 'inherit' }}
-              >
-                Admin & Inventory
-              </Button>
+              {(user.role === 'ROLE_PATIENT' || user.role === 'ROLE_ADMIN') && (
+                <Button
+                  color="inherit"
+                  onClick={() => navigate('/patient')}
+                  sx={{ borderRadius: 2, color: location.pathname === '/patient' ? '#38bdf8' : 'inherit' }}
+                >
+                  Patient Portal
+                </Button>
+              )}
+              {(user.role === 'ROLE_DOCTOR' || user.role === 'ROLE_ADMIN') && (
+                <Button
+                  color="inherit"
+                  onClick={() => navigate('/doctor')}
+                  sx={{ borderRadius: 2, color: location.pathname === '/doctor' ? '#38bdf8' : 'inherit' }}
+                >
+                  Doctor Portal
+                </Button>
+              )}
+              {(user.role === 'ROLE_ADMIN' || user.role === 'ROLE_STAFF') && (
+                <Button
+                  color="inherit"
+                  onClick={() => navigate('/admin')}
+                  sx={{ borderRadius: 2, color: location.pathname === '/admin' ? '#38bdf8' : 'inherit' }}
+                >
+                  Admin & Inventory
+                </Button>
+              )}
               <Button
                 color="inherit"
                 onClick={() => navigate('/queue')}

@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class PrescriptionDto {
     private Long id;
+    private Long appointmentId;
     private Long patientId;
     private String patientName;
     private Long doctorId;

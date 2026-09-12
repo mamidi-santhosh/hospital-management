@@ -29,7 +29,14 @@ const darkTheme = createTheme({
 });
 
 export default function App() {
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
+
+  const getDefaultRoute = () => {
+    if (!isAuthenticated || !user) return '/login';
+    if (user.role === 'ROLE_DOCTOR') return '/doctor';
+    if (user.role === 'ROLE_ADMIN' || user.role === 'ROLE_STAFF') return '/admin';
+    return '/patient';
+  };
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -38,11 +45,38 @@ export default function App() {
         <Navbar />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/patient" element={isAuthenticated ? <PatientDashboard /> : <Navigate to="/login" />} />
-          <Route path="/doctor" element={isAuthenticated ? <DoctorDashboard /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={isAuthenticated ? <AdminDashboard /> : <Navigate to="/login" />} />
+          <Route
+            path="/patient"
+            element={
+              isAuthenticated && (user?.role === 'ROLE_PATIENT' || user?.role === 'ROLE_ADMIN') ? (
+                <PatientDashboard />
+              ) : (
+                <Navigate to={getDefaultRoute()} />
+              )
+            }
+          />
+          <Route
+            path="/doctor"
+            element={
+              isAuthenticated && (user?.role === 'ROLE_DOCTOR' || user?.role === 'ROLE_ADMIN') ? (
+                <DoctorDashboard />
+              ) : (
+                <Navigate to={getDefaultRoute()} />
+              )
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              isAuthenticated && (user?.role === 'ROLE_ADMIN' || user?.role === 'ROLE_STAFF') ? (
+                <AdminDashboard />
+              ) : (
+                <Navigate to={getDefaultRoute()} />
+              )
+            }
+          />
           <Route path="/queue" element={<LiveTokenWidget />} />
-          <Route path="*" element={<Navigate to={isAuthenticated ? "/patient" : "/login"} />} />
+          <Route path="*" element={<Navigate to={getDefaultRoute()} />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

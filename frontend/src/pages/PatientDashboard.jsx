@@ -6,13 +6,15 @@ import MedicalInformationIcon from '@mui/icons-material/MedicalInformation';
 import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import { useSelector } from 'react-redux';
 import axiosClient from '../api/axiosClient';
+import LiveTokenWidget from '../components/LiveTokenWidget';
 
 export default function PatientDashboard() {
   const { user } = useSelector((state) => state.auth);
-  const [patientId, setPatientId] = useState(1);
+  const patientId = user?.id || 1;
   const [doctors, setDoctors] = useState([]);
   const [selectedDoctor, setSelectedDoctor] = useState('');
-  const [appointmentDate, setAppointmentDate] = useState('2026-09-10');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [appointmentDate, setAppointmentDate] = useState(todayStr);
   const [appointmentTime, setAppointmentTime] = useState('10:00:00');
   const [reason, setReason] = useState('Routine Health Checkup');
   const [appointments, setAppointments] = useState([]);
@@ -21,25 +23,30 @@ export default function PatientDashboard() {
   const [statusMsg, setStatusMsg] = useState('');
 
   useEffect(() => {
-    fetchInitialData();
-  }, []);
+    fetchInitialData(patientId);
+  }, [patientId]);
 
-  const fetchInitialData = async () => {
+  const fetchInitialData = async (targetPatientId = patientId) => {
     try {
       // Fetch Doctors Roster
       const docRes = await axiosClient.get('/doctors');
-      setDoctors(docRes.data.data || []);
+      const docList = docRes.data.data || [];
+      setDoctors(docList);
+
+      if (docList.length > 0 && !selectedDoctor) {
+        setSelectedDoctor(docList[0].id);
+      }
 
       // Fetch Patient Appointments
-      const apptRes = await axiosClient.get(`/appointments/patient/${patientId}`);
+      const apptRes = await axiosClient.get(`/appointments/patient/${targetPatientId}`);
       setAppointments(apptRes.data.data || []);
 
       // Fetch EMR History
-      const histRes = await axiosClient.get(`/patients/${patientId}/medical-history`);
+      const histRes = await axiosClient.get(`/patients/${targetPatientId}/medical-history`);
       setMedicalHistory(histRes.data.data || []);
 
       // Fetch Prescriptions
-      const prescRes = await axiosClient.get(`/prescriptions/patient/${patientId}`);
+      const prescRes = await axiosClient.get(`/prescriptions/patient/${targetPatientId}`);
       setPrescriptions(prescRes.data.data || []);
     } catch (e) {
       console.error(e);
@@ -52,7 +59,7 @@ export default function PatientDashboard() {
       const docObj = doctors.find((d) => d.id === selectedDoctor);
       const payload = {
         patientId,
-        patientName: user?.fullName || 'John Doe',
+        patientName: user?.fullName || user?.username || 'Patient',
         doctorId: selectedDoctor,
         doctorName: docObj ? docObj.fullName : 'Dr. Sarah Jenkins',
         appointmentDate,
@@ -63,22 +70,39 @@ export default function PatientDashboard() {
 
       const res = await axiosClient.post('/appointments/book', payload);
       setStatusMsg(`Saga Event Initiated! Booked Appointment Token #${res.data.data.tokenNumber}`);
-      fetchInitialData();
+      fetchInitialData(patientId);
     } catch (err) {
       setStatusMsg('Failed to book appointment.');
     }
   };
 
-  const downloadPrescriptionPdf = (id) => {
-    const token = localStorage.getItem('accessToken');
-    window.open(`http://localhost:8080/api/v1/prescriptions/${id}/pdf?token=${encodeURIComponent(token)}`, '_blank');
+  const downloadPrescriptionPdf = async (id) => {
+    if (!id) return;
+    try {
+      const response = await axiosClient.get(`/prescriptions/${id}/pdf`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Prescription_${id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Blob PDF download failed, using fallback:', e);
+      const token = localStorage.getItem('accessToken');
+      window.open(`http://localhost:8080/api/v1/prescriptions/${id}/pdf?token=${encodeURIComponent(token)}`, '_blank');
+    }
   };
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 8 }}>
       <Box mb={4}>
         <Typography variant="h4" fontWeight="700">
-          Patient Healthcare Portal
+          Patient Healthcare Portal ({user?.fullName || user?.username || 'Patient'})
         </Typography>
         <Typography variant="body1" color="#94a3b8">
           Manage your health records, appointment bookings, and prescription downloads
@@ -88,6 +112,9 @@ export default function PatientDashboard() {
       {statusMsg && (
         <Chip label={statusMsg} color="info" sx={{ mb: 3, p: 1, fontSize: 14 }} onDelete={() => setStatusMsg('')} />
       )}
+
+      {/* Live Queue Tracker wrto Doctor for Patients Selection */}
+      <LiveTokenWidget doctorId={selectedDoctor} showDoctorSelector={true} />
 
       <Grid container spacing={4}>
         {/* Book Appointment Card */}
@@ -107,7 +134,7 @@ export default function PatientDashboard() {
                 label="Select Doctor"
                 margin="normal"
                 value={selectedDoctor}
-                onChange={(e) => setSelectedDoctor(e.target.value)}
+                onChange={(e) => setSelectedDoctor(Number(e.target.value))}
                 sx={{ select: { color: '#fff' } }}
               >
                 {doctors.map((doc) => (
@@ -123,6 +150,7 @@ export default function PatientDashboard() {
                 label="Appointment Date"
                 margin="normal"
                 InputLabelProps={{ shrink: true }}
+                inputProps={{ min: todayStr }}
                 value={appointmentDate}
                 onChange={(e) => setAppointmentDate(e.target.value)}
                 sx={{ input: { color: '#fff' } }}
@@ -176,23 +204,67 @@ export default function PatientDashboard() {
                   <TableCell sx={{ color: '#94a3b8' }}>Date & Time</TableCell>
                   <TableCell sx={{ color: '#94a3b8' }}>Status</TableCell>
                   <TableCell sx={{ color: '#94a3b8' }}>Reason</TableCell>
+                  <TableCell sx={{ color: '#94a3b8' }}>Prescription PDF</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {appointments.map((appt) => (
-                  <TableRow key={appt.id}>
-                    <TableCell sx={{ color: '#38bdf8', fontWeight: 700 }}>#{appt.tokenNumber}</TableCell>
-                    <TableCell sx={{ color: '#fff' }}>{appt.doctorName}</TableCell>
-                    <TableCell sx={{ color: '#fff' }}>{appt.appointmentDate} {appt.appointmentTime}</TableCell>
-                    <TableCell>
-                      <Chip label={appt.status} size="small" color={appt.status === 'CONFIRMED' ? 'success' : 'warning'} />
-                    </TableCell>
-                    <TableCell sx={{ color: '#94a3b8' }}>{appt.reason}</TableCell>
-                  </TableRow>
-                ))}
+                {appointments.map((appt) => {
+                  // 1. Direct appointmentId match for new appointments
+                  let matchingPrescription = prescriptions.find((p) => p.appointmentId === appt.id);
+
+                  // 2. Legacy fallback match by doctor, patient, and chronological position index
+                  if (!matchingPrescription) {
+                    const docPrescriptions = prescriptions.filter(
+                      (p) =>
+                        (p.patientId === appt.patientId || p.patientId === patientId) &&
+                        (p.doctorId === appt.doctorId || (p.doctorName && appt.doctorName && p.doctorName.toLowerCase() === appt.doctorName.toLowerCase()))
+                    );
+
+                    const completedAppts = appointments.filter(
+                      (a) => (a.doctorId === appt.doctorId || a.doctorName === appt.doctorName) && (a.status === 'COMPLETED' || a.id === appt.id)
+                    );
+                    const apptIndex = completedAppts.findIndex((a) => a.id === appt.id);
+
+                    if (apptIndex >= 0 && apptIndex < docPrescriptions.length) {
+                      matchingPrescription = docPrescriptions[docPrescriptions.length - 1 - apptIndex];
+                    } else if (docPrescriptions.length === 1 && appt.status === 'COMPLETED') {
+                      matchingPrescription = docPrescriptions[0];
+                    }
+                  }
+
+                  return (
+                    <TableRow key={appt.id}>
+                      <TableCell sx={{ color: '#38bdf8', fontWeight: 700 }}>#{appt.tokenNumber}</TableCell>
+                      <TableCell sx={{ color: '#fff' }}>{appt.doctorName}</TableCell>
+                      <TableCell sx={{ color: '#fff' }}>{appt.appointmentDate} {appt.appointmentTime}</TableCell>
+                      <TableCell>
+                        <Chip label={appt.status} size="small" color={appt.status === 'COMPLETED' ? 'success' : appt.status === 'CONFIRMED' ? 'info' : 'warning'} />
+                      </TableCell>
+                      <TableCell sx={{ color: '#94a3b8' }}>{appt.reason}</TableCell>
+                      <TableCell>
+                        {matchingPrescription ? (
+                          <Button
+                            variant="contained"
+                            size="small"
+                            color="error"
+                            startIcon={<PictureAsPdfIcon />}
+                            onClick={() => downloadPrescriptionPdf(matchingPrescription.id)}
+                            sx={{ borderRadius: 2 }}
+                          >
+                            Download PDF
+                          </Button>
+                        ) : (
+                          <Typography variant="caption" color="#94a3b8">
+                            {appt.status === 'COMPLETED' ? 'No Prescription Issued' : 'Pending Consultation'}
+                          </Typography>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {appointments.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ color: '#94a3b8' }}>
+                    <TableCell colSpan={6} align="center" sx={{ color: '#94a3b8' }}>
                       No appointments booked yet.
                     </TableCell>
                   </TableRow>

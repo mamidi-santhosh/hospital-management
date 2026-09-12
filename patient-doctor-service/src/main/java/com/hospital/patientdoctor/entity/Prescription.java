@@ -17,6 +17,8 @@ public class Prescription {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private Long appointmentId;
+
     @Column(nullable = false)
     private Long patientId;
 

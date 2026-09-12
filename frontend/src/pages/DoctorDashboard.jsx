@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Grid, Paper, Typography, Box, Button, TextField, Table, TableHead, TableRow, TableCell, TableBody, Chip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Container, Grid, Paper, Typography, Box, Button, TextField, MenuItem, Table, TableHead, TableRow, TableCell, TableBody, Chip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { useSelector } from 'react-redux';
 import axiosClient from '../api/axiosClient';
+import LiveTokenWidget from '../components/LiveTokenWidget';
 
 export default function DoctorDashboard() {
-  const doctorId = 1; // Dr. Sarah Jenkins
+  const { user } = useSelector((state) => state.auth);
+  const [doctors, setDoctors] = useState([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [openPrescriptionDialog, setOpenPrescriptionDialog] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState(null);
@@ -16,17 +20,58 @@ export default function DoctorDashboard() {
   const [instructions, setInstructions] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
 
-  useEffect(() => {
-    fetchDoctorQueue();
-  }, []);
+  const isAdmin = user?.role === 'ROLE_ADMIN';
 
-  const fetchDoctorQueue = async () => {
+  useEffect(() => {
+    fetchDoctors();
+  }, [user]);
+
+  useEffect(() => {
+    if (selectedDoctorId) {
+      fetchDoctorQueue(selectedDoctorId);
+    }
+  }, [selectedDoctorId]);
+
+  const fetchDoctors = async () => {
+    try {
+      const res = await axiosClient.get('/doctors');
+      const docList = res.data.data || [];
+      setDoctors(docList);
+
+      if (user?.role === 'ROLE_DOCTOR' && user?.id) {
+        try {
+          const userDocRes = await axiosClient.get(
+            `/doctors/user/${user.id}?username=${encodeURIComponent(user.username || '')}&fullName=${encodeURIComponent(user.fullName || '')}`
+          );
+          const myDoc = userDocRes.data.data;
+          if (myDoc) {
+            setSelectedDoctorId(myDoc.id);
+            if (!docList.some((d) => d.id === myDoc.id)) {
+              setDoctors([...docList, myDoc]);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch doctor profile by userId:', err);
+        }
+      } else {
+        if (docList.length > 0) {
+          setSelectedDoctorId(docList[0].id);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchDoctorQueue = async (docId = selectedDoctorId) => {
+    if (!docId) return;
     try {
       const today = new Date().toISOString().split('T')[0];
-      const res = await axiosClient.get(`/appointments/doctor/${doctorId}?date=${today}`);
+      const res = await axiosClient.get(`/appointments/doctor/${docId}?date=${today}`);
       setAppointments(res.data.data || []);
     } catch (e) {
       console.error(e);
+      setAppointments([]);
     }
   };
 
@@ -34,7 +79,7 @@ export default function DoctorDashboard() {
     try {
       await axiosClient.put(`/appointments/${apptId}/status?status=${status}`);
       setStatusMsg(`Updated appointment #${apptId} to ${status}`);
-      fetchDoctorQueue();
+      fetchDoctorQueue(selectedDoctorId);
     } catch (e) {
       console.error(e);
     }
@@ -43,39 +88,73 @@ export default function DoctorDashboard() {
   const handleCreatePrescription = async () => {
     if (!selectedAppt) return;
     try {
+      const currentDoc = doctors.find((d) => d.id === selectedDoctorId);
+      
+      // Issue Prescription without forcing appointment completion until doctor explicitly clicks Complete
       await axiosClient.post('/prescriptions', {
+        appointmentId: selectedAppt.id,
         patientId: selectedAppt.patientId,
         patientName: selectedAppt.patientName,
-        doctorId: doctorId,
-        doctorName: selectedAppt.doctorName,
+        doctorId: selectedDoctorId,
+        doctorName: currentDoc ? currentDoc.fullName : selectedAppt.doctorName,
         diagnosis,
         medicines,
         instructions,
       });
-      setStatusMsg(`Prescription issued successfully for ${selectedAppt.patientName}`);
+
+      setStatusMsg(`Prescription issued successfully for ${selectedAppt.patientName}. Mark appointment as Completed when finished.`);
       setOpenPrescriptionDialog(false);
       setDiagnosis('');
       setMedicines('');
       setInstructions('');
+      fetchDoctorQueue(selectedDoctorId);
     } catch (e) {
       console.error(e);
+      setStatusMsg('Failed to issue prescription.');
     }
   };
 
+  const selectedDoctorObj = doctors.find((d) => d.id === selectedDoctorId);
+  const doctorDisplayName = selectedDoctorObj
+    ? selectedDoctorObj.fullName
+    : user?.fullName || user?.username || `Doctor #${selectedDoctorId || ''}`;
+
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 8 }}>
-      <Box mb={4}>
-        <Typography variant="h4" fontWeight="700">
-          Doctor Clinical Portal
-        </Typography>
-        <Typography variant="body1" color="#94a3b8">
-          Manage patient queue consultations, EMR logs, and write digital prescriptions
-        </Typography>
+      <Box mb={4} display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+        <Box>
+          <Typography variant="h4" fontWeight="700">
+            Doctor Clinical Portal ({doctorDisplayName})
+          </Typography>
+          <Typography variant="body1" color="#94a3b8">
+            Manage patient queue consultations, EMR logs, and write digital prescriptions
+          </Typography>
+        </Box>
+
+        {/* Show Doctor Selector ONLY to Administrators */}
+        {isAdmin && doctors.length > 0 && (
+          <TextField
+            select
+            label="Select Doctor Roster (Admin View)"
+            value={selectedDoctorId || ''}
+            onChange={(e) => setSelectedDoctorId(Number(e.target.value))}
+            sx={{ minWidth: 280, select: { color: '#fff' } }}
+          >
+            {doctors.map((doc) => (
+              <MenuItem key={doc.id} value={doc.id}>
+                {doc.fullName} - {doc.specialization}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
       </Box>
 
       {statusMsg && (
         <Chip label={statusMsg} color="success" sx={{ mb: 3, p: 1, fontSize: 14 }} onDelete={() => setStatusMsg('')} />
       )}
+
+      {/* Live Queue Tracker Widget strictly for Logged-In Doctor */}
+      {selectedDoctorId && <LiveTokenWidget doctorId={selectedDoctorId} showDoctorSelector={isAdmin} />}
 
       <Grid container spacing={4}>
         <Grid item xs={12}>
@@ -83,7 +162,7 @@ export default function DoctorDashboard() {
             <Box display="flex" alignItems="center" gap={1} mb={3}>
               <MedicalServicesIcon sx={{ color: '#0d9488', fontSize: 32 }} />
               <Typography variant="h6" fontWeight="600">
-                Today's Consultation Patient Queue
+                Today's Consultation Patient Queue ({doctorDisplayName})
               </Typography>
             </Box>
 
@@ -99,53 +178,64 @@ export default function DoctorDashboard() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {appointments.map((appt) => (
-                  <TableRow key={appt.id}>
-                    <TableCell sx={{ color: '#38bdf8', fontWeight: 800, fontSize: 18 }}>#{appt.tokenNumber}</TableCell>
-                    <TableCell sx={{ color: '#fff', fontWeight: 600 }}>{appt.patientName}</TableCell>
-                    <TableCell sx={{ color: '#fff' }}>{appt.appointmentTime}</TableCell>
-                    <TableCell>
-                      <Chip label={appt.status} color={appt.status === 'COMPLETED' ? 'success' : appt.status === 'IN_PROGRESS' ? 'info' : 'warning'} size="small" />
-                    </TableCell>
-                    <TableCell sx={{ color: '#94a3b8' }}>{appt.reason}</TableCell>
-                    <TableCell>
-                      <Box display="flex" gap={1}>
-                        <Button
-                          variant="contained"
-                          color="info"
+                {appointments.map((appt) => {
+                  const isCompleted = appt.status === 'COMPLETED';
+
+                  return (
+                    <TableRow key={appt.id}>
+                      <TableCell sx={{ color: '#38bdf8', fontWeight: 800, fontSize: 18 }}>#{appt.tokenNumber}</TableCell>
+                      <TableCell sx={{ color: '#fff', fontWeight: 600 }}>{appt.patientName}</TableCell>
+                      <TableCell sx={{ color: '#fff' }}>{appt.appointmentTime}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={appt.status}
+                          color={isCompleted ? 'success' : appt.status === 'IN_PROGRESS' ? 'info' : 'warning'}
                           size="small"
-                          onClick={() => handleUpdateStatus(appt.id, 'IN_PROGRESS')}
-                        >
-                          Call Patient
-                        </Button>
-                        <Button
-                          variant="contained"
-                          color="success"
-                          size="small"
-                          startIcon={<CheckCircleIcon />}
-                          onClick={() => handleUpdateStatus(appt.id, 'COMPLETED')}
-                        >
-                          Complete
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          startIcon={<EditNoteIcon />}
-                          onClick={() => {
-                            setSelectedAppt(appt);
-                            setOpenPrescriptionDialog(true);
-                          }}
-                        >
-                          Write Prescription
-                        </Button>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ color: '#94a3b8' }}>{appt.reason}</TableCell>
+                      <TableCell>
+                        <Box display="flex" gap={1}>
+                          <Button
+                            variant="contained"
+                            color="info"
+                            size="small"
+                            disabled={isCompleted}
+                            onClick={() => handleUpdateStatus(appt.id, 'IN_PROGRESS')}
+                          >
+                            Call Patient
+                          </Button>
+                          <Button
+                            variant="contained"
+                            color="success"
+                            size="small"
+                            disabled={isCompleted}
+                            startIcon={<CheckCircleIcon />}
+                            onClick={() => handleUpdateStatus(appt.id, 'COMPLETED')}
+                          >
+                            {isCompleted ? 'Completed' : 'Complete'}
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            disabled={isCompleted}
+                            startIcon={<EditNoteIcon />}
+                            onClick={() => {
+                              setSelectedAppt(appt);
+                              setOpenPrescriptionDialog(true);
+                            }}
+                          >
+                            Write Prescription
+                          </Button>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {appointments.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ color: '#94a3b8' }}>
-                      No patients currently scheduled for today.
+                      No patients currently scheduled for {doctorDisplayName} today.
                     </TableCell>
                   </TableRow>
                 )}
@@ -196,7 +286,7 @@ export default function DoctorDashboard() {
             Cancel
           </Button>
           <Button variant="contained" color="primary" onClick={handleCreatePrescription}>
-            Issue Prescription PDF
+            Save Prescription PDF
           </Button>
         </DialogActions>
       </Dialog>

@@ -37,4 +37,13 @@ public class DoctorController {
     public ResponseEntity<ApiResponse<DoctorDto>> getDoctorById(@PathVariable("id") Long id) {
         return ResponseEntity.ok(ApiResponse.success("Doctor details fetched successfully", service.getDoctorById(id)));
     }
+
+    @GetMapping("/user/{userId}")
+    @Operation(summary = "Get or create doctor profile by user ID")
+    public ResponseEntity<ApiResponse<DoctorDto>> getDoctorByUserId(
+            @PathVariable("userId") Long userId,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "fullName", required = false) String fullName) {
+        return ResponseEntity.ok(ApiResponse.success("Doctor profile fetched successfully", service.getDoctorByUserId(userId, username, fullName)));
+    }
 }
