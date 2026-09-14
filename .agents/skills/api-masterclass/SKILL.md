@@ -23,6 +23,7 @@ For each API endpoint:
 - **HTTP Method & Full Path**: (e.g. `POST /api/v1/auth/register`).
 - **HTTP Request Headers & Body JSON Payload**: Full JSON sample payload.
 - **HTTP Response Headers, Status Code & Body JSON Payload**: Full JSON response sample (`201 Created` or `200 OK`).
+- **🔄 Jackson `ObjectMapper` Data Transformation Breakdown**: Explicit explanation of how Jackson's `ObjectMapper` / `MappingJackson2HttpMessageConverter` deserializes the incoming JSON request (`objectMapper.readValue()`) into Java DTOs and serializes the outgoing Java response (`objectMapper.writeValueAsString()`) into JSON byte streams over TCP.
 
 ### 3. 📊 PlantUML Sequence & Class Diagrams
 All UML diagrams MUST be formatted using standard **PlantUML syntax** (`@startuml ... @enduml`):
@@ -40,10 +41,13 @@ All UML diagrams MUST be formatted using standard **PlantUML syntax** (`@startum
 For EVERY Java code block (DTO, Controller, Service, Repository, Redis/Security Provider):
 - **Clickable File Header & Line Numbers**: Include file link (`[Controller.java](file:///path/to/file#L20-L35)`).
 - **📌 Purpose & Responsibility (BEFORE Code Block)**: Comprehensive paragraph detailing what the class/method does and its high-level role in the system architecture.
-- **🔬 Deep-Dive Internal Mechanics (AFTER Code Block)**: For every major line or technology encountered (Redis blacklisting, Spring Data JPA, Hibernate L1 Persistence Context & Dirty Checking, Transaction Boundaries, Security Filters), provide a 3-stage breakdown:
+- **🔬 Deep-Dive Internal Mechanics & Advanced Language Concepts (AFTER Code Block)**: For every major line, language feature, or framework technology encountered (Java Generics `<T>`, Type Tokens `Class<T>`, Type Erasure, Redis blacklisting, Spring Data JPA, Hibernate L1 Persistence Context & Dirty Checking, Jackson `ObjectMapper` serialization/deserialization, Functional Interfaces `Supplier<T>`, Transaction Boundaries, Security Filters), provide a 3-stage breakdown:
   1. 🔴 **BEFORE Execution**: Exact state of memory, database tables, Redis key stores, and JVM heap before executing the line.
-  2. ⚙️ **EXECUTION UNDER THE HOOD**: Low-level execution details — exact protocol commands (`SETEX key ttl value`), SQL queries (`UPDATE ...`), JDBC `PreparedStatement` execution, Hibernate dirty check comparison, Jackson serialization, or AOP proxy interceptors.
+  2. ⚙️ **EXECUTION UNDER THE HOOD**: Low-level execution details — exact protocol commands (`SETEX key ttl value`), SQL queries (`UPDATE ...`), JDBC `PreparedStatement` execution, Hibernate dirty check comparison, Jackson `ObjectMapper` `readValue()` / `writeValueAsString()` conversion, or AOP proxy interceptors.
   3. 🟢 **AFTER Execution**: Exact state changes in memory, database rows, and Redis keys, along with instant security / architectural impacts.
+  4. 💡 **Advanced Java Concept Deep Dive (Why & What Problem it Resolves)**: For advanced Java patterns (e.g. why a generic method is typed as `<T> T ... Class<T> clazz`), explain:
+     - **Why it is typed this way**: The core language mechanism (e.g. Type Safety, Type Erasure, Generic Inference).
+     - **What problem it resolves**: Contrast **WITHOUT the feature** (runtime `ClassCastException`, unsafe manual casting, code duplication) vs. **WITH the feature** (compile-time safety, single reusable generic component, zero casting).
 - **System Design Interview Q&A**: 3-4 interviewer-style questions and bulletproof candidate answers.
 
 ---

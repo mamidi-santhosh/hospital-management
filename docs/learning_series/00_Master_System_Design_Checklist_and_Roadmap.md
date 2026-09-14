@@ -43,8 +43,8 @@ Each module includes **Layman Concept Explanations + End-to-End Request/Response
   3. `POST /api/v1/auth/refresh` (Refresh Token Rotation & New Access Token Issue)  
   4. `POST /api/v1/auth/logout` (Stateless Token Revocation & Revoked State Cleanup)
 
-- [ ] **Day 03: Redis Cache Stampede Protection & Patient Profiles (`auth-service` & `patient-doctor-service`)**  
-  👉 Document: `Day_03_Redis_Stampede_and_Patient_Profiles_APIs.md`  
+- [x] **Day 03: Redis Cache Stampede Protection & Patient Profiles (`auth-service` & `patient-doctor-service`)**  
+  👉 Document: [`Day_03_Redis_Stampede_and_Patient_Profiles_APIs.md`](file:///c:/Mamidi/2026/POC/hospital%20management/docs/learning_series/Day_03_Redis_Stampede_and_Patient_Profiles_APIs.md)  
   *APIs*:  
   5. `GET /api/v1/auth/users/{id}` (User Profile Lookup with Redis Mutex Stampede Protection)  
   6. `POST /api/v1/patients` (Register / Update Patient Profile & Entity PrePersist)

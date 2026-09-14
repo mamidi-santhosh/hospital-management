@@ -7,6 +7,7 @@ Welcome to **Day 1**! Today we dissect the two foundational security endpoints o
 # 🐣 SECTION 1: Layman Analogy vs. Backend Developer Analogy
 Before inspecting the Java code, review how each core concept translates from real-world non-technical analogies into concrete backend software engineering terms:
 | Concept / Technology | 🐣 Layman Analogy | 💻 Backend Developer Analogy & Technical Definition |
+| **Jackson ObjectMapper & HTTP Converters** | A translator sitting between two diplomats. Translates spoken English (**JSON bytes**) into written shorthand (**Java Objects**) and back! | Spring MVC's `MappingJackson2HttpMessageConverter` wrapping `com.fasterxml.jackson.databind.ObjectMapper`. Converts raw HTTP JSON bytes into Java DTOs (`readValue()`) and Java objects into UTF-8 JSON responses (`writeValueAsString()`). |
 | :--- | :--- | :--- |
 | **API (Application Programming Interface)** | A restaurant menu and waiter. You select a dish (**Request**), the waiter delivers it to the kitchen (**Backend**), and brings back your meal on a tray (**Response**). | A stateless HTTP/REST contract defining URI resource paths (/api/v1/auth/register), methods (POST), headers (Content-Type), and JSON payloads over TCP. |
 | **API Gateway & Microservices** | A hospital front-entrance security guard who checks visitor badges and directs people to specialized clinical departments. | A non-blocking Reverse Proxy & Edge Router (Spring Cloud Gateway on Netty) handling cross-cutting concerns (CORS, Rate Limiting, JWT validation) and routing traffic to autonomous Spring Boot services. |
@@ -134,14 +135,14 @@ User "1" <-- "0..1" RefreshToken : user_id (@OneToOne)
 #### **BEFORE API Execution (auth_db.users Table)**
 | id | username | email | password | full_name | phone_number | role | enabled | created_at |
 |:---|:---|:---|:---|:---|:---|:---|:---|:---|
-| 1 | john_doe | john@example.com | $2a$10$e8X... | John Doe | 1234567890 | ROLE_PATIENT | 1 | 2026-09-01 10:00:00 |
+| 1 | john_doe | john@example.com | ->2a->10->e8X... | John Doe | 1234567890 | ROLE_PATIENT | 1 | 2026-09-01 10:00:00 |
 ---
 #### **AFTER API Execution (auth_db.users Table)**
 | id | username | email | password | full_name | phone_number | role | enabled | created_at |
 |:---|:---|:---|:---|:---|:---|:---|:---|:---|
-| 1 | john_doe | john@example.com | $2a$10$e8X... | John Doe | 1234567890 | ROLE_PATIENT | 1 | 2026-09-01 10:00:00 |
-| **101** | **sarah_patient** | **sarah@example.com** | **$2a$10$wN3vA8kL...** | **Sarah Jenkins** | **555-987-6543** | **ROLE_PATIENT** | **1** | **2026-09-14 23:26:00** |
-> 🔒 **Notice**: Password "password123" was transformed into BCrypt Hash $2a$10$wN3vA8kL...!
+| 1 | john_doe | john@example.com | ->2a->10->e8X... | John Doe | 1234567890 | ROLE_PATIENT | 1 | 2026-09-01 10:00:00 |
+| **101** | **sarah_patient** | **sarah@example.com** | **->2a->10->wN3vA8kL...** | **Sarah Jenkins** | **555-987-6543** | **ROLE_PATIENT** | **1** | **2026-09-14 23:26:00** |
+> 🔒 **Notice**: Password "password123" was transformed into BCrypt Hash ->2a->10->wN3vA8kL...!
 ---
 ## 4. Code Dissection & Line-by-Line Annotations Walkthrough
 
@@ -244,7 +245,7 @@ The Service Layer encapsulates enterprise business logic, transaction boundary m
 - `Line 34: @Transactional`: Declares a Spring transaction boundary. Ensures database operations run inside an ACID-compliant transaction. If any runtime exception is thrown (e.g. database disconnect or downstream service failure), all SQL operations roll back automatically.
 - `Lines 36-41: Duplicate Validation`: Executes optimized `SELECT COUNT(*)` queries via `userRepository.existsByUsername()` and `existsByEmail()`. If duplicate matches exist, throws `IllegalArgumentException` to halt registration.
 - `Lines 43-51: User.builder()`: Utilizes Lombok Builder pattern to assemble domain entity.
-  - `Line 46: passwordEncoder.encode(...)`: Key Security Step! Uses BCrypt algorithm with a 128-bit random salt to convert raw password `"password123"` into a non-invertible 60-character hash (`$2a$10$wN3v...`).
+  - `Line 46: passwordEncoder.encode(...)`: Key Security Step! Uses BCrypt algorithm with a 128-bit random salt to convert raw password `"password123"` into a non-invertible 60-character hash (`->2a->10->wN3v...`).
 - `Line 53: userRepository.save(user)`: Passes domain entity to Spring Data JPA / Hibernate, executing SQL `INSERT INTO users (...)` statement and returning managed entity with generated auto-increment ID (`101`).
 - `Line 55: mapToUserDto(savedUser)`: Transforms internal `User` entity into public `UserDto`, deliberately excluding sensitive fields like `password` hash from HTTP responses.
 ---
@@ -302,8 +303,8 @@ GW -> CTRL: Forward Request to AuthController.login()
 CTRL -> SVC: authService.login(loginRequest)
 SVC -> REPO: findByUsername("sarah_patient")
 REPO -> DB: SELECT * FROM users WHERE username = 'sarah_patient'
-DB --> REPO: Returns User Entity (Hashed Password: $2a$10$wN3v...)
-SVC -> SVC: passwordEncoder.matches("password123", "$2a$10$wN3v...")
+DB --> REPO: Returns User Entity (Hashed Password: ->2a->10->wN3v...)
+SVC -> SVC: passwordEncoder.matches("password123", "->2a->10->wN3v...")
 note over SVC, JWT: Generate 15-Min Access Token
 SVC -> JWT: generateAccessToken(userEntity)
 JWT --> SVC: Returns Signed JWT String (HS512)

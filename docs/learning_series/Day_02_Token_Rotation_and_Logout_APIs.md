@@ -13,6 +13,7 @@ Welcome to **Day 2**! Today we dissect the two token lifecycle maintenance endpo
 Before inspecting the Java code, review how each core concept translates from real-world non-technical analogies into concrete backend software engineering terms:
 
 | Concept / Technology | 🐣 Layman Analogy | 💻 Backend Developer Analogy & Technical Definition |
+| **Jackson ObjectMapper & HTTP Converters** | A translator sitting between two diplomats. Translates spoken English (**JSON bytes**) into written shorthand (**Java Objects**) and back! | Spring MVC's `MappingJackson2HttpMessageConverter` wrapping `com.fasterxml.jackson.databind.ObjectMapper`. Converts raw HTTP JSON bytes into Java DTOs (`readValue()`) and Java objects into UTF-8 JSON responses (`writeValueAsString()`). |
 | :--- | :--- | :--- |
 | **Refresh Token Rotation** | Exchanging an expiring VIP wristband at the customer service desk using your 7-day membership card. The clerk checks that your card is valid and hands you a fresh wristband. | Requesting a new 15-minute JWT Access Token by presenting a valid database-backed Refresh Token UUID string (`POST /api/v1/auth/refresh`) without requiring user password re-entry. |
 | **Token Revocation & Logout** | Canceling your lost hotel key card at the front desk. Even if someone finds your old card, the electronic doors will reject it immediately. | Explicitly invalidating an active session by marking the `refresh_tokens.revoked` column to `1 (true)` in MySQL and pushing the active JWT Access Token hash into a Redis Blacklist (`blacklist:<jwt>`) with a 15-minute TTL. |
@@ -64,6 +65,18 @@ Before inspecting the Java code, review how each core concept translates from re
     "timestamp": "2026-09-14T23:40:00.123"
   }
   ```
+
+### **🔄 Jackson `ObjectMapper` Data Transformation Pipeline**
+
+1. **Incoming Request Deserialization (JSON -> Java DTO)**:
+   - 🔴 **BEFORE Execution**: Client sends raw HTTP `POST` body bytes: `{"refreshToken":"4a71b123-9876..."}`.
+   - ⚙️ **EXECUTION UNDER THE HOOD**: `MappingJackson2HttpMessageConverter` invokes `objectMapper.readValue(inputStream, RefreshTokenRequest.class)`. Jackson parses the JSON token stream and populates the `refreshToken` field on the Java request instance.
+   - 🟢 **AFTER Execution**: `RefreshTokenRequest` DTO is passed to `AuthController.refreshToken()`.
+
+2. **Outgoing Response Serialization (Java Object -> JSON)**:
+   - 🔴 **BEFORE Execution**: Service constructs `AuthResponse` containing fresh `accessToken` string.
+   - ⚙️ **EXECUTION UNDER THE HOOD**: Spring MVC invokes `objectMapper.writeValueAsString(apiResponse)`. Jackson serializes fields (`accessToken`, `refreshToken`, `userId`, `roles`) into formatted JSON UTF-8 output bytes.
+   - 🟢 **AFTER Execution**: Output stream is written to TCP buffer with HTTP status `200 OK`.
 
 ---
 
@@ -391,7 +404,7 @@ Executes token revocation logic by stripping the `Bearer ` prefix from the Acces
   4. `StringRedisTemplate` delegates to `Jedis` / `Lettuce` connection driver, serializing strings into UTF-8 byte arrays (`byte[]`).
   5. Driver sends binary Redis RESP2 Protocol command over TCP socket to Redis Server (port 6379):  
      `SETEX blacklist:eyJhbGci... 900 revoked`
-  6. Redis Server receives command, inserts key into its primary hash table dictionary ($O(1)$ time complexity), and attaches a 900-second (15-minute) TTL ticker in its internal expiration dictionary.
+  6. Redis Server receives command, inserts key into its primary hash table dictionary (->O(1)-> time complexity), and attaches a 900-second (15-minute) TTL ticker in its internal expiration dictionary.
 
 - 🟢 **AFTER Executing Line 139**:
   - Redis contains key `"blacklist:eyJhbGci..."` set to value `"revoked"` with a 15-minute TTL.
@@ -440,7 +453,7 @@ public boolean isTokenBlacklisted(String token) {
 
 🔬 **Deep Dive: Internal Mechanics & Execution Mechanics**:
 - `redisTemplate.opsForValue().set(key, "revoked", ttl)`: Executes Redis `SETEX` command setting key expiration atomically.
-- `redisTemplate.hasKey(key)`: Executes Redis `EXISTS` check. Runs in $O(1)$ constant time!
+- `redisTemplate.hasKey(key)`: Executes Redis `EXISTS` check. Runs in ->O(1)-> constant time!
 
 ---
 
