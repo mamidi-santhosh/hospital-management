@@ -154,7 +154,13 @@ export default function DoctorDashboard() {
       )}
 
       {/* Live Queue Tracker Widget strictly for Logged-In Doctor */}
-      {selectedDoctorId && <LiveTokenWidget doctorId={selectedDoctorId} showDoctorSelector={isAdmin} />}
+      {selectedDoctorId && (
+        <LiveTokenWidget
+          doctorId={selectedDoctorId}
+          onDoctorChange={(newDocId) => setSelectedDoctorId(newDocId)}
+          showDoctorSelector={isAdmin}
+        />
+      )}
 
       <Grid container spacing={4}>
         <Grid item xs={12}>

@@ -70,16 +70,32 @@ public class AppointmentService {
         appt.setStatus(status);
         Appointment saved = appointmentRepository.save(appt);
 
-        // Broadcast token update if status changed to IN_PROGRESS or COMPLETED
-        List<Appointment> activeQueue = appointmentRepository.findByDoctorIdAndAppointmentDateAndStatusIn(
-                saved.getDoctorId(), saved.getAppointmentDate(), List.of(AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS));
+        // Fetch all appointments for doctor today ordered by token number
+        List<Appointment> allToday = appointmentRepository.findByDoctorIdAndAppointmentDateOrderByTokenNumberAsc(
+                saved.getDoctorId(), saved.getAppointmentDate());
+
+        Appointment inProgress = allToday.stream()
+                .filter(a -> a.getStatus() == AppointmentStatus.IN_PROGRESS)
+                .findFirst().orElse(null);
+
+        Appointment nextUpcoming = allToday.stream()
+                .filter(a -> a.getStatus() == AppointmentStatus.CONFIRMED || a.getStatus() == AppointmentStatus.PENDING)
+                .findFirst().orElse(null);
+
+        Appointment lastCompleted = allToday.stream()
+                .filter(a -> a.getStatus() == AppointmentStatus.COMPLETED)
+                .reduce((first, second) -> second).orElse(null);
+
+        int currentServingToken = inProgress != null ? inProgress.getTokenNumber() : (lastCompleted != null ? lastCompleted.getTokenNumber() : 0);
+        int nextUpcomingToken = nextUpcoming != null ? nextUpcoming.getTokenNumber() : 0;
+        int totalInQueue = (int) allToday.stream().filter(a -> a.getStatus() != AppointmentStatus.CANCELLED && a.getStatus() != AppointmentStatus.COMPLETED).count();
 
         tokenStreamingService.broadcastTokenUpdate(
                 saved.getDoctorId(),
                 saved.getDoctorName(),
-                saved.getTokenNumber(),
-                saved.getTokenNumber() + 1,
-                activeQueue.size()
+                currentServingToken,
+                nextUpcomingToken,
+                totalInQueue
         );
 
         return mapToDto(saved);

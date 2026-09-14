@@ -36,8 +36,11 @@ public class PatientController {
 
     @GetMapping("/user/{userId}")
     @Operation(summary = "Get patient profile by User ID")
-    public ResponseEntity<ApiResponse<PatientDto>> getPatientByUserId(@PathVariable("userId") Long userId) {
-        PatientDto patient = service.getPatientByUserId(userId);
+    public ResponseEntity<ApiResponse<PatientDto>> getPatientByUserId(
+            @PathVariable("userId") Long userId,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "fullName", required = false) String fullName) {
+        PatientDto patient = service.getPatientByUserId(userId, username, fullName);
         return ResponseEntity.ok(ApiResponse.success("Patient details fetched successfully", patient));
     }
 

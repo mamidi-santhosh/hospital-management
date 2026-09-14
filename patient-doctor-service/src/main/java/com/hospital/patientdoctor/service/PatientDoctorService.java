@@ -44,8 +44,29 @@ public class PatientDoctorService {
     }
 
     public PatientDto getPatientByUserId(Long userId) {
+        return getPatientByUserId(userId, null, null);
+    }
+
+    public PatientDto getPatientByUserId(Long userId, String username, String fullName) {
+        String expectedName = (fullName != null && !fullName.trim().isEmpty()) ? fullName : (username != null ? username : "User #" + userId);
         Patient patient = patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Patient profile not found for user id: " + userId));
+                .map(p -> {
+                    if (username != null && !p.getFullName().toLowerCase().contains(username.toLowerCase()) && !p.getFullName().equals(expectedName)) {
+                        p.setFullName(expectedName);
+                        return patientRepository.save(p);
+                    }
+                    return p;
+                })
+                .orElseGet(() -> {
+                    Patient newPatient = Patient.builder()
+                            .userId(userId)
+                            .fullName(expectedName)
+                            .gender("Male")
+                            .bloodGroup("O+")
+                            .phoneNumber("1234567890")
+                            .build();
+                    return patientRepository.save(newPatient);
+                });
         return mapToPatientDto(patient);
     }
 

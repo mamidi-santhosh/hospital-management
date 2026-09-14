@@ -52,6 +52,37 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
 
+        // Auto-provision domain profile in patient-doctor-service
+        try {
+            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+            if (savedUser.getRole() == com.hospital.auth.entity.Role.ROLE_PATIENT) {
+                java.util.Map<String, Object> patBody = new java.util.HashMap<>();
+                patBody.put("userId", savedUser.getId());
+                patBody.put("fullName", (savedUser.getFullName() != null && !savedUser.getFullName().trim().isEmpty()) ? savedUser.getFullName() : savedUser.getUsername());
+                patBody.put("phoneNumber", savedUser.getPhoneNumber() != null ? savedUser.getPhoneNumber() : "1234567890");
+                patBody.put("gender", "Male");
+                patBody.put("bloodGroup", "O+");
+                restTemplate.postForObject("http://localhost:8082/api/v1/patients", patBody, Object.class);
+            } else if (savedUser.getRole() == com.hospital.auth.entity.Role.ROLE_DOCTOR) {
+                String docName = (savedUser.getFullName() != null && !savedUser.getFullName().trim().isEmpty()) ? savedUser.getFullName() : savedUser.getUsername();
+                if (!docName.toLowerCase().startsWith("dr.")) {
+                    docName = "Dr. " + docName;
+                }
+                java.util.Map<String, Object> docBody = new java.util.HashMap<>();
+                docBody.put("userId", savedUser.getId());
+                docBody.put("fullName", docName);
+                docBody.put("specialization", "General Medicine");
+                docBody.put("qualification", "MD");
+                docBody.put("experienceYears", 5);
+                docBody.put("consultationFee", new java.math.BigDecimal("150.00"));
+                docBody.put("availableDays", "Mon-Fri");
+                docBody.put("available", true);
+                restTemplate.postForObject("http://localhost:8082/api/v1/doctors", docBody, Object.class);
+            }
+        } catch (Exception e) {
+            log.error("Failed to auto-provision domain profile in patient-doctor-service:", e);
+        }
+
         return mapToUserDto(savedUser);
     }
 

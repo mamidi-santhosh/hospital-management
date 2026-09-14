@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Paper, Typography, Grid, Chip, Button, Select, MenuItem, FormControl, InputLabel, Container } from '@mui/material';
+import { Box, Paper, Typography, Grid, Chip, Button, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 import SensorsIcon from '@mui/icons-material/Sensors';
@@ -7,7 +7,7 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import axiosClient from '../api/axiosClient';
 
-export default function LiveTokenWidget({ doctorId: propDoctorId, showDoctorSelector = true }) {
+export default function LiveTokenWidget({ doctorId: propDoctorId, onDoctorChange, showDoctorSelector = true }) {
   const [selectedDoctorId, setSelectedDoctorId] = useState(propDoctorId || 1);
   const [doctors, setDoctors] = useState([]);
   const [queueState, setQueueState] = useState({
@@ -53,12 +53,14 @@ export default function LiveTokenWidget({ doctorId: propDoctorId, showDoctorSele
       const res = await axiosClient.get(`/appointments/doctor/${docId}?date=${today}`);
       const appts = res.data.data || [];
       
-      const activeAppts = appts.filter((a) => a.status !== 'CANCELLED' && a.status !== 'COMPLETED');
-      const currentServing = appts.find((a) => a.status === 'IN_PROGRESS') || activeAppts[0];
-      
-      const currentServingToken = currentServing ? currentServing.tokenNumber : (appts.length > 0 ? appts[0].tokenNumber : 0);
-      const nextUpcomingToken = currentServing ? currentServingToken + 1 : 0;
-      const totalInQueue = activeAppts.length;
+      const inProgress = appts.find((a) => a.status === 'IN_PROGRESS');
+      const waitingAppts = appts.filter((a) => a.status === 'CONFIRMED' || a.status === 'PENDING');
+      const completedAppts = appts.filter((a) => a.status === 'COMPLETED');
+      const lastCompleted = completedAppts.length > 0 ? completedAppts[completedAppts.length - 1] : null;
+
+      const currentServingToken = inProgress ? inProgress.tokenNumber : (lastCompleted ? lastCompleted.tokenNumber : 0);
+      const nextUpcomingToken = waitingAppts.length > 0 ? waitingAppts[0].tokenNumber : 0;
+      const totalInQueue = appts.filter((a) => a.status !== 'CANCELLED' && a.status !== 'COMPLETED').length;
       const docObj = doctors.find((d) => d.id === docId);
 
       setQueueState({
@@ -92,8 +94,8 @@ export default function LiveTokenWidget({ doctorId: propDoctorId, showDoctorSele
           const payload = JSON.parse(message.body);
           setQueueState((prev) => ({
             ...prev,
-            currentServingToken: payload.currentServingToken || prev.currentServingToken,
-            nextUpcomingToken: payload.nextUpcomingToken || prev.nextUpcomingToken,
+            currentServingToken: payload.currentServingToken !== undefined ? payload.currentServingToken : prev.currentServingToken,
+            nextUpcomingToken: payload.nextUpcomingToken !== undefined ? payload.nextUpcomingToken : prev.nextUpcomingToken,
             totalInQueue: payload.totalInQueue !== undefined ? payload.totalInQueue : prev.totalInQueue,
             doctorName: payload.doctorName || prev.doctorName,
           }));
@@ -112,15 +114,16 @@ export default function LiveTokenWidget({ doctorId: propDoctorId, showDoctorSele
     };
   }, [selectedDoctorId]);
 
-  const simulateTokenNext = () => {
-    const nextToken = queueState.currentServingToken + 1;
-    setQueueState((prev) => ({
-      ...prev,
-      currentServingToken: nextToken,
-      nextUpcomingToken: nextToken + 1,
-      totalInQueue: Math.max(0, prev.totalInQueue - 1),
-    }));
+  const handleDoctorSelectChange = (e) => {
+    const newId = Number(e.target.value);
+    setSelectedDoctorId(newId);
+    if (onDoctorChange) {
+      onDoctorChange(newId);
+    }
   };
+
+  const selectedDoctorObj = doctors.find((d) => d.id === selectedDoctorId);
+  const activeDoctorName = selectedDoctorObj ? selectedDoctorObj.fullName : (queueState.doctorName || `Doctor #${selectedDoctorId}`);
 
   return (
     <Paper
@@ -138,7 +141,7 @@ export default function LiveTokenWidget({ doctorId: propDoctorId, showDoctorSele
         <Box display="flex" alignItems="center" gap={1.5}>
           <SensorsIcon sx={{ color: '#10b981', fontSize: 32 }} />
           <Typography variant="h6" fontWeight="700">
-            Real-Time Queue Tracker {queueState.doctorName ? `(${queueState.doctorName})` : ''}
+            Real-Time Queue Tracker ({activeDoctorName})
           </Typography>
         </Box>
         <Chip
@@ -157,7 +160,7 @@ export default function LiveTokenWidget({ doctorId: propDoctorId, showDoctorSele
           <InputLabel sx={{ color: '#94a3b8' }}>Select Doctor Roster</InputLabel>
           <Select
             value={selectedDoctorId}
-            onChange={(e) => setSelectedDoctorId(Number(e.target.value))}
+            onChange={handleDoctorSelectChange}
             sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: '#334155' } }}
           >
             {doctors.map((doc) => (

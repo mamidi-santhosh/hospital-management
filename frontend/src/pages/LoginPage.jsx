@@ -45,7 +45,44 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg('');
     try {
-      await axiosClient.post('/auth/register', { username, email, password, fullName, phoneNumber, role });
+      const regRes = await axiosClient.post('/auth/register', { username, email, password, fullName, phoneNumber, role });
+      const regUser = regRes.data.data;
+
+      if (regUser && regUser.id) {
+        if (role === 'ROLE_PATIENT') {
+          try {
+            await axiosClient.post('/patients', {
+              userId: regUser.id,
+              fullName: fullName || username,
+              phoneNumber: phoneNumber || '1234567890',
+              gender: 'Male',
+              bloodGroup: 'O+',
+            });
+          } catch (patErr) {
+            console.error('Failed to auto-provision patient profile:', patErr);
+          }
+        } else if (role === 'ROLE_DOCTOR') {
+          try {
+            let docName = fullName || username;
+            if (!docName.toLowerCase().startsWith('dr.')) {
+              docName = `Dr. ${docName}`;
+            }
+            await axiosClient.post('/doctors', {
+              userId: regUser.id,
+              fullName: docName,
+              specialization: 'General Medicine',
+              qualification: 'MD',
+              experienceYears: 5,
+              consultationFee: 150.0,
+              availableDays: 'Mon-Fri',
+              available: true,
+            });
+          } catch (docErr) {
+            console.error('Failed to auto-provision doctor profile:', docErr);
+          }
+        }
+      }
+
       setSuccessMsg('Registration successful! Please login with your credentials.');
       setTabIndex(0);
     } catch (err) {
